@@ -49,19 +49,18 @@ def optimize(graph, initial_estimate):
 def minimize_marginals(graph, initial_estimate, pose_options):
     #TODO: try different pose and landmark options here, and keep the one with the lowest sum of marginals.
     
-
     marginals_list = []
     land_mark_options = [1, 2]
     
     for landmark in land_mark_options:
         for key in pose_options:
-            # Fresh copy for each combination
+            #new copy for each combination
             graph_copy = deepcopy(graph)
             estimate_copy = gtsam.Values(initial_estimate)
             
             pose_5 = pose_options[key]
             
-            # Use copies, not originals
+          
             graph_copy, estimate_copy = add_pose(graph_copy, estimate_copy, pose_5)
             result = optimize(graph_copy, estimate_copy)
             
@@ -69,31 +68,12 @@ def minimize_marginals(graph, initial_estimate, pose_options):
             result = optimize(graph_copy, estimate_copy)
             
             marginals = gtsam.Marginals(graph_copy, result)
-            cov = marginals.marginalCovariance(L(landmark))
+            sum_of_marginals = marginals.marginalCovariance(L(landmark)).sum()
 
-            print(f"pose: {key}, landmark: {landmark}")
-            print(f"covariance matrix:\n{cov}")
-            print(f"sum: {cov.sum()}")
-            print(f"trace: {np.trace(cov)}")
-            print(f"det: {np.linalg.det(cov)}")
-            print("---")
-
-            marginals_list.append(np.trace(cov))
-
-            cov_x4 = marginals.marginalCovariance(X(4))
-            cov_l1 = marginals.marginalCovariance(L(1))
-            cov_l2 = marginals.marginalCovariance(L(2))
-
-            print(f"trace X4: {np.trace(cov_x4)}")
-            print(f"trace L1: {np.trace(cov_l1)}")
-            print(f"trace L2: {np.trace(cov_l2)}")
-            print(f"sum of all traces: {np.trace(cov_x4) + np.trace(cov_l1) + np.trace(cov_l2)}")
-            print(f"sum L1+L2: {np.trace(cov_l1) + np.trace(cov_l2)}")
-
-    print(f"all marginals: {marginals_list}")
-    print(f"target value: 0.15697937979143664")
+            marginals_list.append(sum_of_marginals)
     
     index_lowest_marginals = np.argmin(marginals_list)
+
     if index_lowest_marginals <= 3:
         best_pose = list(pose_options)[index_lowest_marginals]
         best_landmark = 1 
@@ -101,10 +81,16 @@ def minimize_marginals(graph, initial_estimate, pose_options):
         best_pose = list(pose_options)[index_lowest_marginals - 4]
         best_landmark = 2
 
-    # Return the actual marginals object for the best combination
+    # Returns the actual marginals object for the best combination
     sum_of_marginals = marginals_list[index_lowest_marginals]
 
-    #print(f"pose is {best_pose} and landmark is {best_landmark}")
+
+    graph, initial_estimate = add_pose(graph, initial_estimate, pose_options[best_pose])
+    result = optimize(graph, initial_estimate)
+    graph = add_landmark_measurement(graph, result, pose_options[best_pose], best_landmark)
+    result = optimize(graph, initial_estimate)
+    marginals = gtsam.Marginals(graph, result)
+    sum_of_marginals = marginals.marginalCovariance(L(1)).sum() + marginals.marginalCovariance(L(2)).sum() 
     return best_pose, best_landmark, sum_of_marginals
 
 
@@ -146,15 +132,6 @@ def minimize_marginals(graph, initial_estimate, pose_options):
 
 
     # return best_pose, best_landmark, sum_of_marginals
-
-
-
-
-
-
-
-
-
 
 def minimize_errors(graph, initial_estimate, pose_options):
     #TODO: try different pose and landmark options here, and keep the one with the lowest resulting error.
